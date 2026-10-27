@@ -1,0 +1,50 @@
+# MOT20: independent test with settings LOCKED from MOT17 (no tuning on MOT20).
+# Depth weight 2.0 and threshold 0.7 were chosen on the MOT17 tuning halves.
+benchmark: MOT20
+paths:
+  mot17_root: data/MOT20        # key name kept for compatibility; must contain train/MOT20-01/...
+  cache_dir: cache
+  results_dir: results
+  trackeval: null
+
+# The 4 MOT20 training sequences (the only ones with public ground truth).
+sequences: [MOT20-01, MOT20-02, MOT20-03, MOT20-05]
+
+detector:
+  weights: yolov8s.pt
+  imgsz: 1088
+  conf: 0.05
+  iou: 0.7
+  device: "0"
+  threads: 0
+  max_det: 1000                 # MOT20 frames can hold several hundred people
+
+depth:
+  model: depth-anything/Depth-Anything-V2-Small-hf
+  input_size: 518
+  device: cuda
+  threads: 0
+  save_maps: false
+
+tracker:                        # identical to the final MOT17 setting
+  track_thresh: 0.5
+  low_thresh: 0.1
+  new_track_thresh: 0.6
+  match_thresh: 0.8
+  track_buffer: 30
+  fuse_score: true
+  depth_weight: 2.0
+  depth_momentum: 0.5
+  depth_stale: 30
+  depth_in_second: true
+  min_box_area: 100
+  max_aspect: 1.6
+
+policies:
+  - {name: no_depth, type: never}
+  - {name: pseudo_depth, type: pseudo}
+  - {name: always_depth, type: always}
+  - {name: fixed, type: fixed, every: [2, 5, 20, 30]}
+  - {name: fixed_N10, type: fixed, every: 10, offset: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+  - {name: od_margin, type: ondemand, score: margin, hold: 0, threshold: [0.5, 0.7, 0.9]}
+  - {name: od_margin_hold, type: ondemand, score: margin, threshold: 0.7, hold: 3}

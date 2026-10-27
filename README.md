@@ -1,468 +1,165 @@
 # When Is Depth Worth Computing for Multi-Object Tracking?
 
-## On-Demand Monocular Depth Based on Association Difficulty
+**On-demand monocular depth based on association difficulty.** CSCE 585 (Machine Learning Systems) project, Abdulahi Taiwo.
 
-**Author:** Abdulahi Taiwo  
-**Course:** CSCE 585  
-**Research Area:** Computer Vision · Multi-Object Tracking · Monocular Depth Estimation · Computational Efficiency  
-**Project Status:** **Approved Research Proposal — Implementation Pending**
+A ByteTrack tracker on YOLOv8 detections calls **Depth Anything V2** only when its
+**ambiguity score** says depth could change an association. It is evaluated on MOT17
+against no depth, depth on every frame, depth every N frames, and free pseudo-depth,
+using tracking metrics (HOTA, IDF1, AssA, ID switches) and system metrics
+(latency, FPS, memory, depth invocation rate).
 
----
-
-## Overview
-
-Multi-object tracking (MOT) requires a tracking system to detect multiple objects and maintain consistent identities for those objects across video frames. This becomes particularly challenging when objects overlap, cross paths, or undergo occlusion, creating uncertainty when detections must be associated with existing tracks.
-
-Depth information can provide additional spatial information that may help resolve difficult associations and preserve object identities. However, monocular depth estimation introduces additional computational cost. Computing depth for every frame may therefore be unnecessary when object associations are already straightforward.
-
-This project proposes an **on-demand monocular depth strategy for multi-object tracking**. Rather than estimating depth continuously, the proposed system will use an **association-ambiguity score** to determine when additional depth information is needed.
-
-When association ambiguity is low, depth estimation will be skipped. When ambiguity is high, monocular depth estimation will be invoked to provide additional spatial information for the association process.
-
-The project will investigate whether this selective strategy can provide a better **tracking-performance versus computational-cost trade-off** than computing depth continuously or at predetermined fixed intervals.
-
----
-
-## Problem Statement
-
-Maintaining consistent object identities is a fundamental challenge in multi-object tracking.
-
-Association becomes particularly difficult when objects:
-
-- overlap;
-- cross paths;
-- undergo partial or temporary occlusion; or
-- create multiple plausible detection-to-track associations.
-
-These situations can increase the likelihood of incorrect associations and identity switches.
-
-Depth information provides an additional spatial cue that may help distinguish objects during difficult association events. However, obtaining monocular depth estimates requires additional computation.
-
-This creates an important efficiency problem:
-
-> **Should a tracking system pay the computational cost of depth estimation on every frame when many frames may contain straightforward associations?**
-
-This project investigates whether depth computation can instead be allocated according to **association difficulty**.
-
----
-
-## Research Question
-
-The primary research question is:
-
-> **Can tracking ambiguity determine when depth is needed?**
-
-The project investigates whether an association-difficulty signal can identify situations in which monocular depth information may be sufficiently useful to justify its computational cost.
-
-A central experimental question is:
-
-> **At the same depth-computation budget, does on-demand depth outperform fixed-rate depth?**
-
-This comparison will investigate whether deciding **when** to compute depth according to tracking difficulty is more effective than allocating the same depth computation at predetermined temporal intervals.
-
----
-
-## Motivation
-
-Not all tracking situations have the same level of difficulty.
-
-Some frames may contain well-separated objects with straightforward associations. Other frames may contain overlapping, crossing, or occluded objects for which association becomes considerably more difficult.
-
-This creates a trade-off between the potential value of depth information and the computational cost required to obtain it.
-
-Four general depth-computation strategies can therefore be considered:
-
-1. **No Depth** — never compute depth.
-2. **Always Depth** — compute depth for every frame.
-3. **Fixed-Rate Depth** — compute depth every *N* frames.
-4. **On-Demand Depth** — compute depth when association ambiguity indicates that additional spatial information may be useful.
-
-The fourth strategy forms the central focus of this research.
-
-Rather than asking only whether depth can assist multi-object tracking, this project investigates a more resource-aware question:
-
-> **When is depth worth computing?**
-
----
-
-## Proposed Methodology
-
-The proposed framework consists of four primary components:
-
-### 1. Object Detection
-
-**YOLOv8** is planned as the object detector for identifying objects in each video frame.
-
-### 2. Multi-Object Tracking
-
-**ByteTrack or BoT-SORT** will provide the baseline tracking and identity-association framework.
-
-### 3. Association-Ambiguity Estimation
-
-A proposed **ambiguity score** will evaluate the difficulty of the current detection-to-track association problem and determine whether additional depth information should be requested.
-
-### 4. On-Demand Monocular Depth Estimation
-
-**Depth Anything V2** will be used to estimate monocular depth when the association process is determined to have high ambiguity.
-
-### Proposed Architecture
-
-```text
-                     Input Video
-                          |
-                          v
-                  Object Detection
-                       YOLOv8
-                          |
-                          v
-                Multi-Object Tracking
-                ByteTrack / BoT-SORT
-                          |
-                          v
-              Association Difficulty
-                       Analysis
-                          |
-                          v
-                   Ambiguity Score
-                     /          \
-                    /            \
-                   v              v
-          Low Ambiguity      High Ambiguity
-                |                  |
-                v                  v
-           Skip Depth       Compute Monocular
-                             Depth Information
-                         (Depth Anything V2)
-                |                  |
-                \                  /
-                 \                /
-                  v              v
-                Association / Track Update
-                          |
-                          v
-                     Output Tracks
+```
+frame ─► YOLOv8 ─► Kalman predict ─► similarity matrix ─► ambiguity score ─┬─ low ──► associate (IoU)
+                                                                          └─ high ─► Depth Anything V2
+                                                                                     ─► associate (IoU + depth)
 ```
 
-The fundamental decision policy is:
-
-> **Low Ambiguity → Skip Depth**
-
-> **High Ambiguity → Compute Depth**
-
-The objective is not to eliminate depth estimation, but to allocate it selectively to tracking situations in which additional spatial information may be most useful.
+Design rationale (useful for the report and the final presentation): **[DESIGN.md](DESIGN.md)**.
 
 ---
 
-## Association-Ambiguity Concept
+## 1. Setup (Windows laptop, CPU only)
 
-A central component of the proposed research is determining how **association difficulty** should be quantified.
+Use Python 3.10, 3.11 or 3.12 (3.11 recommended). In PowerShell, from this folder:
 
-During multi-object tracking, detections in the current frame must be matched with existing tracks. Some matches may be clear, while others may involve several plausible associations.
-
-The project will investigate an ambiguity measure capable of distinguishing between these conditions.
-
-Potential indicators to be investigated during implementation may include:
-
-- competing detection-to-track matches;
-- object overlap;
-- crossing trajectories;
-- occlusion;
-- similarity among candidate associations; and
-- uncertainty within the track-to-detection matching process.
-
-The exact mathematical formulation and threshold of the ambiguity score have **not yet been finalized** and remain part of the planned research.
-
-Conceptually:
-
-```text
-Clear Association
-       |
-       v
-Low Ambiguity
-       |
-       v
-Skip Depth
-
-
-Difficult Association
-       |
-       v
-High Ambiguity
-       |
-       v
-Invoke Depth Estimation
-       |
-       v
-Use Additional Spatial Information
-for Association
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+python tests\test_pipeline.py        # should end with "10 tests passed"
 ```
 
-This allows depth computation to respond to the state of the tracking problem rather than following a fixed schedule.
+The YOLOv8 weights (~22 MB) and the Depth Anything V2 Small weights (~100 MB) download
+automatically on first use.
 
----
+## 2. Get MOT17
 
-## Research Objectives
+1. Download **MOT17.zip** (about 5.5 GB) from <https://motchallenge.net/data/MOT17/>.
+2. Unzip it so that this file exists: `data\MOT17\train\MOT17-02-FRCNN\seqinfo.ini`.
+3. Optional, to save disk space: only the `-FRCNN` folders are used, so you can delete the
+   `-DPM` and `-SDP` folders and the `test` folder.
 
-The planned research objectives are to:
+```powershell
+python -m odmot check
+```
 
-1. Establish a baseline multi-object tracking pipeline.
-2. Investigate measurable indicators of association difficulty during multi-object tracking.
-3. Develop an ambiguity-based mechanism for determining when monocular depth estimation should be invoked.
-4. Integrate Depth Anything V2 with the tracking pipeline for selective depth estimation.
-5. Implement an on-demand depth-triggering strategy based on association ambiguity.
-6. Compare the proposed approach against **No Depth, Always Depth, and Fixed-Rate Depth** strategies.
-7. Evaluate the effect of selective depth computation on tracking and identity association.
-8. Measure the computational requirements associated with the different depth strategies.
-9. Determine whether on-demand depth can provide a better balance between tracking quality and computational efficiency.
+`check` lists the 7 training sequences (5,316 frames) and writes TrackEval ground truth for
+each split.
 
----
+## 3. Run the experiment
 
-## Research Hypothesis
+All commands are run from the repo root. `scripts\run_all.bat` runs the whole sequence.
 
-The project is based on the hypothesis that:
+| Step | Command | Time on a CPU laptop |
+|---|---|---|
+| Measure your speed | `python -m odmot estimate` | 2 min |
+| Detect every frame once | `python -m odmot cache-det` | about 0.5 to 1 h |
+| Depth on every frame once | `python -m odmot cache-depth` | about 2 to 4 h (run overnight) |
+| Tune on the first half of each sequence | `python -m odmot sweep --split train_half` | about 5 to 15 min |
+| Report on the second half | `python -m odmot sweep --split val_half` | about 5 to 15 min |
+| Does the score find the right frames? | `python -m odmot analyze --split val_half` | about 2 min |
+| Demo video | `python -m odmot demo --seq MOT17-09 --frames 150 --policy od_margin_thr0.7 --video results\demo.mp4` | about 5 min |
 
-> **Depth information does not need to be computed uniformly across every video frame to provide useful information for multi-object tracking.**
+The times are rough guesses for an Intel i5 with no GPU. `estimate` prints the real
+projection for your machine.
 
-Instead, selectively invoking monocular depth estimation during periods of high association ambiguity may provide useful spatial information during difficult associations while avoiding unnecessary depth computation during straightforward tracking conditions.
+**Caching is resumable.** Each finished sequence is skipped on the next run, so if the
+laptop sleeps or you press Ctrl+C, run the same command again. While caching, keep the
+laptop plugged in and set Windows sleep to "Never". With 8 GB of RAM, close the browser:
+each model needs about 1 to 1.5 GB.
 
-The experimental phase of this project will determine whether this hypothesis is supported.
+**If depth caching is too slow**, set `depth.input_size: 392` in `configs/default.yaml`
+(about 1.8 times faster). Likewise `detector.imgsz: 640` speeds up detection but misses
+small, distant people. Changing either value creates a new cache folder, so old results
+stay valid.
 
----
+### Why it's organised this way
 
-## Experimental Plan
+The neural networks run once per frame and their outputs and **measured times** are
+cached. Every policy then replays the same frames. When a policy asks for depth on frame
+*t*, it gets frame *t*'s cached depth and is charged frame *t*'s measured depth time. The
+accuracy is exactly what the live system would get, and the cost is real measured cost.
+This turns months of CPU time into minutes. `demo` runs the models live to confirm that
+the simulated latency matches reality.
 
-### Dataset
+## 4. What you get
 
-The planned experimental evaluation will use the **MOT17** benchmark dataset.
+`results/<split>/main/`:
 
-MOT17 provides established video sequences for evaluating multi-object tracking systems and will allow the proposed approach to be evaluated using recognized MOT performance metrics.
+* **`summary.csv`**: one row per policy, with `depth_rate`, `HOTA`, `DetA`, `AssA`, `IDF1`,
+  `IDSW`, `MOTA`, `latency_mean_ms`, `latency_p95_ms`, `fps`, `depth_compute_s`,
+  `model_memory_mb`, and the **budget-matched comparison** `dHOTA_vs_fixed` /
+  `dIDF1_vs_fixed`. These measure how far a policy sits above (+) or below (−) the
+  fixed-rate curve at the same depth rate. This column answers the research question.
+* **`tradeoff_depth_rate.png`**: HOTA, IDF1 and ID switches against the % of frames with
+  depth. The gray dashed line is fixed-rate; colored lines are on-demand.
+* **`tradeoff_latency.png`**: the same plots against measured mean latency.
+* `<policy>/data/*.txt` (MOT-format tracks), `<policy>/cost.json`, and `metrics.json` (per-sequence).
 
-### Baselines and Comparison Strategies
+`results/val_half/analysis/`:
 
-| Method | Depth Usage |
+* **`score_analysis.json`** and **`score_recall_at_budget.png`**: on every frame the
+  tracker solves association with and without depth on the same state, and checks both
+  against the ground-truth identities. This shows how often depth changes, helps, or
+  hurts a decision. It also shows how well each score ranks those frames (ROC-AUC), and
+  what share of the "depth helped" frames a given depth budget catches.
+
+### Protocol (keep it honest)
+
+1. Choose the on-demand threshold, score type and `depth_weight` on **`train_half`**.
+2. Report that **same** configuration on **`val_half`**. It's fine to show the full curves
+   for `val_half`, but don't pick the best `val_half` point and present it as the result.
+3. Report `latency_p95_ms` next to mean FPS. On-demand makes the average faster, but the
+   slowest frames are still the ones that compute depth.
+
+## 5. Policies (in `configs/default.yaml`)
+
+| Name | Depth usage |
 |---|---|
-| **No Depth** | Depth is never computed |
-| **Always Depth** | Depth is computed for every frame |
-| **Fixed-Rate Depth** | Depth is computed every *N* frames |
-| **On-Demand Depth (Proposed)** | Depth is computed when association ambiguity is high |
-
-These comparisons are intended to determine both whether depth is useful and whether **selective allocation** of depth computation provides advantages over conventional allocation strategies.
-
-### Compute-Budget Comparison
-
-A central part of the experimental design will compare **Fixed-Rate Depth** and **On-Demand Depth** under comparable depth-computation budgets.
-
-For example, if an on-demand configuration invokes depth for a particular proportion of frames, a fixed-rate configuration can be selected to produce a comparable number of depth invocations.
-
-Tracking performance can then be evaluated under approximately equivalent depth-computation budgets.
-
-The resulting comparison addresses the central question:
-
-> **Given approximately the same depth-computation budget, is it more effective to allocate depth according to association difficulty than according to fixed temporal intervals?**
-
----
-
-## Evaluation Metrics
-
-Evaluation will consider both **tracking performance** and **system performance**.
-
-### Tracking Metrics
-
-#### HOTA — Higher Order Tracking Accuracy
-
-HOTA will provide a measure of overall multi-object tracking performance.
-
-#### IDF1 — Identity F1 Score
-
-IDF1 will be used to evaluate how consistently object identities are preserved throughout tracking sequences.
-
-#### AssA — Association Accuracy
-
-Association Accuracy is particularly relevant because the proposed method focuses directly on difficult object-association situations.
-
-#### ID Switches
-
-Identity switches will be measured to determine how frequently the tracker incorrectly changes an object's assigned identity.
-
-### System Metrics
-
-The computational behavior of each strategy will also be evaluated.
-
-Planned system metrics include:
-
-- **Latency**
-- **Frames Per Second (FPS)**
-- **Memory Usage**
-- **Depth Invocation Frequency**
-
-Depth invocation frequency will measure how often monocular depth estimation is activated and will support comparisons between fixed-rate and on-demand strategies under similar depth-computation budgets.
-
----
-
-## Implementation Roadmap
-
-### Phase 1 — Baseline Setup
-
-- Prepare the development environment.
-- Prepare the MOT17 dataset.
-- Establish YOLOv8 object detection.
-- Establish the baseline ByteTrack/BoT-SORT tracking pipeline.
-
-### Phase 2 — Association Difficulty
-
-- Study the track-to-detection association process.
-- Identify measurable indicators of difficult associations.
-- Develop the proposed ambiguity score.
-- Determine an appropriate depth-triggering policy.
-
-### Phase 3 — Depth Integration
-
-- Integrate Depth Anything V2.
-- Associate depth information with tracked objects.
-- Establish the Always-Depth configuration.
-
-### Phase 4 — On-Demand Depth
-
-- Connect the ambiguity mechanism to the depth estimator.
-- Implement selective depth invocation.
-- Record depth-triggering events.
-
-### Phase 5 — Baseline Experiments
-
-Evaluate:
-
-- No Depth
-- Always Depth
-- Fixed-Rate Depth
-- On-Demand Depth
-
-### Phase 6 — Performance Evaluation
-
-Measure:
-
-- HOTA
-- IDF1
-- AssA
-- ID Switches
-- Latency
-- FPS
-- Memory Usage
-- Depth Invocation Frequency
-
-### Phase 7 — Compute-Budget Analysis
-
-Compare Fixed-Rate Depth and On-Demand Depth under comparable depth-computation budgets.
-
-### Phase 8 — Analysis and Documentation
-
-- Analyze experimental results.
-- Generate figures and tables.
-- Document limitations.
-- Prepare the final CSCE 585 project report.
-- Update the repository with experimental results and reproducibility instructions.
-
----
-
-## Current Progress
-
-**Current Stage: Approved Research Proposal**
-
-This repository currently documents the proposed methodology and experimental plan. **Implementation and experimental evaluation have not yet been completed.**
-
-### Progress Checklist
-
-- [x] Research problem identified
-- [x] Research question formulated
-- [x] Initial literature review
-- [x] Proposed methodology developed
-- [x] Experimental strategy defined
-- [x] Project proposal presented
-- [x] Project proposal approved
-- [ ] Development environment setup
-- [ ] MOT17 dataset preparation
-- [ ] Baseline tracker implementation
-- [ ] Association ambiguity formulation
-- [ ] Ambiguity scoring implementation
-- [ ] Depth Anything V2 integration
-- [ ] On-demand depth triggering
-- [ ] No-Depth experiments
-- [ ] Always-Depth experiments
-- [ ] Fixed-Rate experiments
-- [ ] On-Demand experiments
-- [ ] Compute-budget comparison
-- [ ] Tracking performance evaluation
-- [ ] System performance evaluation
-- [ ] Results analysis
-- [ ] Final project report
-
-The repository will be updated as implementation and experimentation progress.
-
----
-
-## Related Work
-
-The project is informed by recent research in **multi-object tracking, depth-aware association, occlusion handling, and adaptive depth computation**.
-
-### PD-SORT
-
-**PD-SORT: Occlusion-Robust Multi-Object Tracking Using Pseudo-Depth Cues** investigates the use of pseudo-depth cues for improving multi-object tracking, particularly under occlusion.
-
-This work is relevant to the present project because it demonstrates how depth-related spatial information can contribute to object association. The proposed project differs in its central question: rather than simply making depth information available to the tracker, it investigates **when depth computation is worth performing**.
-
-- **DOI:** [10.1109/TCE.2025.3541839](https://doi.org/10.1109/TCE.2025.3541839)
-
-### FDTA
-
-**From Detection to Association: Learning Discriminative Object Embeddings for Multi-Object Tracking (FDTA)** addresses association quality in multi-object tracking through feature refinement, including depth-aware spatial cues.
-
-FDTA is relevant to this project because it further demonstrates the importance of spatial and depth-aware information for improving object association.
-
-- **CVPR 2026:** [Official Paper Page](https://openaccess.thecvf.com/content/CVPR2026/html/Shao_From_Detection_to_Association_Learning_Discriminative_Object_Embeddings_for_Multi-Object_CVPR_2026_paper.html)
-
-### CADENCE
-
-**CADENCE: Context-Adaptive Depth Estimation for Navigation and Computational Efficiency** investigates adaptive depth estimation from the perspective of computational efficiency.
-
-Its context-adaptive computation concept is particularly relevant to the motivation of this project: computationally expensive depth estimation may not need to operate uniformly when the value of depth varies with the current situation.
-
-- **DOI:** [10.1109/AIIoT68874.2026.11569617](https://doi.org/10.1109/AIIoT68874.2026.11569617)
-
-Together, these works motivate the intersection explored in this project:
-
-> **Can the association state of a multi-object tracker itself determine when the computational cost of monocular depth estimation is justified?**
-
----
-
-## References
-
-1. Y. Wang, D. Zhang, R. Li, Z. Zheng, and M. Li, **“PD-SORT: Occlusion-Robust Multi-Object Tracking Using Pseudo-Depth Cues,”** *IEEE Transactions on Consumer Electronics*, 2025.  
-   [DOI: 10.1109/TCE.2025.3541839](https://doi.org/10.1109/TCE.2025.3541839)
-
-2. Y. Shao, Y. Yang, R. Yu, W. Li, X. Guo, H. Yan, W. Wang, and X. Sun, **“From Detection to Association: Learning Discriminative Object Embeddings for Multi-Object Tracking,”** *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)*, pp. 6878–6888, 2026.  
-   [CVPR 2026 Official Paper Page](https://openaccess.thecvf.com/content/CVPR2026/html/Shao_From_Detection_to_Association_Learning_Discriminative_Object_Embeddings_for_Multi-Object_CVPR_2026_paper.html)
-
-3. T. K. Johnsen and M. Levorato, **“CADENCE: Context-Adaptive Depth Estimation for Navigation and Computational Efficiency,”** *2026 IEEE World AI IoT Congress (AIIoT)*, 2026.  
-   [DOI: 10.1109/AIIoT68874.2026.11569617](https://doi.org/10.1109/AIIoT68874.2026.11569617)
-
-### Planned Technical Components
-
-The proposed implementation will additionally use or evaluate:
-
-- **YOLOv8** — object detection
-- **ByteTrack** — multi-object tracking
-- **BoT-SORT** — multi-object tracking
-- **Depth Anything V2** — monocular depth estimation
-- **MOT17** — multi-object tracking benchmark
-
-Complete technical citations for the implementation components will be maintained as the implementation stage begins.
-
----
-
-## Project Information
-
-**Author:** Abdulahi Taiwo  
-**Course:** CSCE 585  
-**Research Area:** Computer Vision / Multi-Object Tracking / Monocular Depth Estimation / Computational Efficiency  
-**Status:** **Approved Research Proposal — Implementation Pending**
-
-> This repository will be updated throughout the implementation, experimentation, and evaluation stages of the CSCE 585 research project.
+| `no_depth` | never (plain ByteTrack) |
+| `pseudo_depth` | PD-SORT-style pseudo-depth from box bottoms, every frame (free) |
+| `always_depth` | Depth Anything on every frame |
+| `fixed_N<k>` | Depth Anything every k frames |
+| `od_margin_thr<t>` | **ours**: when the margin ambiguity score ≥ t |
+| `od_crowd_thr<t>`, `od_hybrid_thr<t>` | alternative ambiguity scores |
+| `od_margin_hold_…` | keep depth on for a few frames after a trigger |
+| `od_margin_pd_…` | on-demand depth, with pseudo-depth on all other frames |
+
+A list value in the config (for example `threshold: [0.5, 0.7]`) expands into a sweep. Use
+`--only "no_depth,od_margin*"` to run a subset.
+
+## 6. Tests and verification
+
+* `python tests/test_pipeline.py` runs unit and integration tests. They don't need PyTorch
+  or the dataset.
+* `python tests/make_synthetic.py --out synth` builds a small synthetic dataset in MOT17
+  layout with ready-made caches. Run it with
+  `python -m odmot --config synth/synthetic.yaml sweep`. It exercises the whole pipeline,
+  including TrackEval, in about 2 minutes. **The numbers it produces are not results**;
+  it is a plumbing test.
+* `scripts/compare_bytetrack.py` checks the tracker against the official ByteTrack code.
+  The outputs were identical on 100% of frames (instructions are in the file).
+
+## 7. Repository layout
+
+```
+odmot/
+  data.py        MOT17 reading, half splits, TrackEval GT preparation
+  models.py      YOLOv8 + Depth Anything V2 wrappers, depth-to-box helpers, pseudo-depth
+  cache.py       run models once, cache outputs + measured timings (resumable)
+  kalman.py      ByteTrack's Kalman filter
+  tracker.py     ByteTrack with the gated depth term (verified against official code)
+  ambiguity.py   margin / crowd / hybrid ambiguity scores
+  policies.py    never / pseudo / always / fixed / on-demand controllers
+  runner.py      replay a policy over a split, per-frame cost accounting
+  evaluate.py    TrackEval wrapper (HOTA, IDF1, AssA, IDSW, MOTA)
+  report.py      summary table, Pareto front, budget-matched deltas
+  analysis.py    does the score predict the frames where depth helps?
+  plots.py       presentation plots
+  live.py        live run with real models + annotated demo video
+  cli.py         python -m odmot <command>
+configs/default.yaml
+tests/           tests + synthetic-data generator
+scripts/         run_all.bat / run_all.sh, ByteTrack cross-check
+```

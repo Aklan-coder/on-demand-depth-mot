@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/
+cache/
+results/
+synth/
+*.pt
+*.mp4
+
+# Credentials and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Archives and model checkpoints
+*.zip
+*.pth
+*.ckpt
+*.onnx
+
+# Development files
+.vscode/
+.idea/

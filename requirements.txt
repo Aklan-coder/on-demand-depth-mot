@@ -1,0 +1,12 @@
+# Install PyTorch FIRST (CPU build, see README), then:  pip install -r requirements.txt
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+pyyaml>=6.0
+opencv-python>=4.8
+psutil>=5.9
+ultralytics>=8.1          # YOLOv8
+transformers>=4.45        # Depth Anything V2 (Hugging Face port)
+# Official HOTA / IDF1 evaluation (no git needed):
+https://github.com/JonathonLuiten/TrackEval/archive/refs/heads/master.zip

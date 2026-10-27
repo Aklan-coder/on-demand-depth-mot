@@ -1,0 +1,55 @@
+# On-demand depth for MOT - default experiment configuration.
+# Paths are relative to the folder you run `python -m odmot` from (the repo root).
+
+paths:
+  mot17_root: data/MOT17        # must contain train/MOT17-02-FRCNN/... (official MOT17.zip)
+  cache_dir: cache              # detection + depth caches (a few hundred MB)
+  results_dir: results          # tracker outputs, TrackEval results, summary.csv, plots
+  trackeval: null               # path to a cloned TrackEval folder if not pip-installed
+
+# The 7 MOT17 training sequences (the only ones with public ground truth).
+sequences: [MOT17-02, MOT17-04, MOT17-05, MOT17-09, MOT17-10, MOT17-11, MOT17-13]
+
+detector:
+  weights: yolov8s.pt           # COCO-pretrained; downloads automatically on first use
+  imgsz: 1088                   # CPU knob: 640 is ~2.5x faster but misses small people
+  conf: 0.05                    # keep low-score boxes - ByteTrack's 2nd association uses them
+  iou: 0.7
+  device: cpu
+  threads: 0                    # 0 = PyTorch default (all cores)
+
+depth:
+  model: depth-anything/Depth-Anything-V2-Small-hf
+  input_size: 518               # official setting; 392 is ~1.8x faster on CPU
+  device: cpu
+  threads: 0
+  save_maps: false              # true stores uint8 depth maps (~0.5 MB/frame) for figures
+
+tracker:                        # ByteTrack MOT17 defaults + depth fusion settings
+  track_thresh: 0.5
+  low_thresh: 0.1
+  new_track_thresh: 0.6
+  match_thresh: 0.8
+  track_buffer: 30
+  fuse_score: true
+  depth_weight: 0.5             # weight of |depth difference| in the association cost
+  depth_momentum: 0.5           # EMA weight of a track's previous depth
+  depth_stale: 30               # ignore a track's depth reading older than this (frames)
+  depth_in_second: true
+  min_box_area: 100
+  max_aspect: 1.6
+
+# Policies. A list value for every / threshold / hold expands into a sweep.
+policies:
+  - {name: no_depth, type: never}
+  - {name: pseudo_depth, type: pseudo}
+  - {name: always_depth, type: always}
+  - {name: fixed, type: fixed, every: [2, 3, 5, 10, 20, 30]}
+  - {name: od_margin, type: ondemand, score: margin, hold: 0,
+     threshold: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
+  - {name: od_crowd, type: ondemand, score: crowd, hold: 0,
+     threshold: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]}
+  - {name: od_hybrid, type: ondemand, score: hybrid, hold: 0,
+     threshold: [0.3, 0.5, 0.7]}
+  - {name: od_margin_hold, type: ondemand, score: margin, threshold: [0.5, 0.7], hold: [3, 10]}
+  - {name: od_margin_pd, type: ondemand, score: margin, threshold: [0.5, 0.7], fallback: pseudo}
