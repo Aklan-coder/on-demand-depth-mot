@@ -8,6 +8,45 @@ against no depth, depth on every frame, depth every N frames, and free pseudo-de
 using tracking metrics (HOTA, IDF1, AssA, ID switches) and system metrics
 (latency, FPS, memory, depth invocation rate).
 
+
+
+
+## Research Results
+
+**71% lower GPU processing latency with comparable tracking accuracy.**
+
+This project implements ambiguity-driven, on-demand monocular depth estimation for multi-object tracking using YOLOv8s, ByteTrack, and Depth Anything V2.
+
+Evaluated on seven MOT17 sequences (5,316 frames) using an NVIDIA Quadro RTX 6000 GPU.
+
+### Performance Comparison
+
+| Method | Depth Usage | HOTA ↑ | IDF1 ↑ | ID Switches ↓ | Latency ↓ | FPS ↑ |
+|---|---:|---:|---:|---:|---:|---:|
+| No Depth | 0% | 46.61 | 54.89 | 143 | 12.8 ms | 78 |
+| Always Depth | 100% | 46.73 | 55.24 | 138 | 63.1 ms | 16 |
+| Fixed-Rate (N=10) | 10.1% | 46.52 | 54.83 | 145.8 | 18.1 ms | 55 |
+| Random Trigger | 11.5% | 46.46 | 54.79 | 143.8 | 18.1 ms | 55 |
+| **On-Demand (Ours)** | **11.5%** | **46.63** | **54.97** | **146** | **18.1 ms** | **55** |
+
+### Key Findings
+
+- **71% lower GPU latency:** 63.1 ms/frame to 18.1 ms/frame compared with always-on depth.
+- **3.4× higher throughput:** Approximately 55 FPS versus 16 FPS.
+- **Selective depth computation:** Only 11.5% of frames required depth estimation.
+- **Ambiguity detection:** ROC-AUC of 0.94 for identifying frames where depth changes matching decisions.
+- **Comparable tracking accuracy:** HOTA 46.63 versus 46.73 for always-depth.
+
+### Limitations
+
+Accuracy improvements over the no-depth baseline were small. On-demand depth produced 146 identity switches versus 143 for no-depth, and performance varied across video sequences.
+
+The main demonstrated contribution is computational efficiency while maintaining comparable tracking accuracy, rather than a large improvement in tracking accuracy.
+
+*Results are from preliminary MOT17 evaluation, with thresholds tuned on training halves and performance reported on held-out validation halves.*
+
+
+
 ```
 frame ─► YOLOv8 ─► Kalman predict ─► similarity matrix ─► ambiguity score ─┬─ low ──► associate (IoU)
                                                                           └─ high ─► Depth Anything V2
